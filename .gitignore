@@ -10,3 +10,6 @@
 /tools/config.sh
 /app/.externalNativeBuild
 /app/release
+libvpn/build/tmp/
+libvpn/build/
+libvpn/.externalNativeBuild/
