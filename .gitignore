@@ -10,6 +10,7 @@
 /tools/config.sh
 /app/.externalNativeBuild
 /app/release
-libvpn/build/tmp/
-libvpn/build/
+/app/play
+keystore.properties
 libvpn/.externalNativeBuild/
+libvpn/build/

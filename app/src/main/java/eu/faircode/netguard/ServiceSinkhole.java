@@ -16,7 +16,7 @@ package eu.faircode.netguard;
     You should have received a copy of the GNU General Public License
     along with NetGuard.  If not, see <http://www.gnu.org/licenses/>.
 
-    Copyright 2015-2018 by Marcel Bokhorst (M66B)
+    Copyright 2015-2019 by Marcel Bokhorst (M66B)
 */
 
 import android.annotation.TargetApi;
@@ -58,10 +58,6 @@ import android.os.PowerManager;
 import android.os.Process;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.NotificationManagerCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.LocalBroadcastManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.text.Spannable;
@@ -111,6 +107,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.net.ssl.HttpsURLConnection;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 public class ServiceSinkhole extends VpnService implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = "NetGuard.Service";
@@ -656,7 +657,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
             StringBuilder json = new StringBuilder();
             HttpsURLConnection urlConnection = null;
             try {
-                URL url = new URL("https://api.github.com/repos/M66B/NetGuard/releases/latest");
+                URL url = new URL(BuildConfig.GITHUB_LATEST_API);
                 urlConnection = (HttpsURLConnection) url.openConnection();
                 BufferedReader br = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
 
@@ -1173,7 +1174,19 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private ParcelFileDescriptor startVPN(Builder builder) throws SecurityException {
         try {
-            return builder.establish();
+            ParcelFileDescriptor pfd = builder.establish();
+
+            // Set underlying network
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                Network active = (cm == null ? null : cm.getActiveNetwork());
+                if (active != null) {
+                    Log.i(TAG, "Setting underlying network=" + cm.getNetworkInfo(active));
+                    setUnderlyingNetworks(new Network[]{active});
+                }
+            }
+
+            return pfd;
         } catch (SecurityException ex) {
             throw ex;
         } catch (Throwable ex) {
@@ -1704,13 +1717,17 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         boolean org_metered = metered;
         boolean org_roaming = roaming;
 
+        // https://issuetracker.google.com/issues/70633700
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1)
+            ssidHomes.clear();
+
         // Update metered state
         if (wifi && !useMetered)
             metered = false;
         if (wifi && ssidHomes.size() > 0 &&
                 !(ssidHomes.contains(ssidNetwork) || ssidHomes.contains('"' + ssidNetwork + '"'))) {
             metered = true;
-            Log.i(TAG, "!@home");
+            Log.i(TAG, "!@home=" + ssidNetwork + " homes=" + TextUtils.join(",", ssidHomes));
         }
         if (unmetered_2g && "2G".equals(generation))
             metered = false;

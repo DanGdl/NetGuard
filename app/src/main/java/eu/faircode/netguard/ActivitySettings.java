@@ -16,7 +16,7 @@ package eu.faircode.netguard;
     You should have received a copy of the GNU General Public License
     along with NetGuard.  If not, see <http://www.gnu.org/licenses/>.
 
-    Copyright 2015-2018 by Marcel Bokhorst (M66B)
+    Copyright 2015-2019 by Marcel Bokhorst (M66B)
 */
 
 import android.Manifest;
@@ -47,11 +47,6 @@ import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.preference.TwoStatePreference;
-import android.support.annotation.NonNull;
-import android.support.v4.app.NavUtils;
-import android.support.v4.content.LocalBroadcastManager;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -91,6 +86,12 @@ import java.util.Set;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.NavUtils;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
 public class ActivitySettings extends AppCompatActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = "NetGuard.Settings";
 
@@ -99,7 +100,8 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
     private static final int REQUEST_EXPORT = 1;
     private static final int REQUEST_IMPORT = 2;
     private static final int REQUEST_HOSTS = 3;
-    private static final int REQUEST_CALL = 4;
+    private static final int REQUEST_HOSTS_APPEND = 4;
+    private static final int REQUEST_CALL = 5;
 
     private AlertDialog dialogFilter = null;
 
@@ -124,6 +126,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         PreferenceGroup cat_options = (PreferenceGroup) ((PreferenceGroup) screen.findPreference("screen_options")).findPreference("category_options");
+        PreferenceGroup cat_network = (PreferenceGroup) ((PreferenceGroup) screen.findPreference("screen_network_options")).findPreference("category_network_options");
         PreferenceGroup cat_advanced = (PreferenceGroup) ((PreferenceGroup) screen.findPreference("screen_advanced_options")).findPreference("category_advanced_options");
         PreferenceGroup cat_stats = (PreferenceGroup) ((PreferenceGroup) screen.findPreference("screen_stats")).findPreference("category_stats");
         PreferenceGroup cat_backup = (PreferenceGroup) ((PreferenceGroup) screen.findPreference("screen_backup")).findPreference("category_backup");
@@ -149,23 +152,27 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
 
         // Wi-Fi home
         MultiSelectListPreference pref_wifi_homes = (MultiSelectListPreference) screen.findPreference("wifi_homes");
-        Set<String> ssids = prefs.getStringSet("wifi_homes", new HashSet<String>());
-        if (ssids.size() > 0)
-            pref_wifi_homes.setTitle(getString(R.string.setting_wifi_home, TextUtils.join(", ", ssids)));
-        else
-            pref_wifi_homes.setTitle(getString(R.string.setting_wifi_home, "-"));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1)
+            cat_network.removePreference(pref_wifi_homes);
+        else {
+            Set<String> ssids = prefs.getStringSet("wifi_homes", new HashSet<String>());
+            if (ssids.size() > 0)
+                pref_wifi_homes.setTitle(getString(R.string.setting_wifi_home, TextUtils.join(", ", ssids)));
+            else
+                pref_wifi_homes.setTitle(getString(R.string.setting_wifi_home, "-"));
 
-        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        List<CharSequence> listSSID = new ArrayList<>();
-        List<WifiConfiguration> configs = wm.getConfiguredNetworks();
-        if (configs != null)
-            for (WifiConfiguration config : configs)
-                listSSID.add(config.SSID == null ? "NULL" : config.SSID);
-        for (String ssid : ssids)
-            if (!listSSID.contains(ssid))
-                listSSID.add(ssid);
-        pref_wifi_homes.setEntries(listSSID.toArray(new CharSequence[0]));
-        pref_wifi_homes.setEntryValues(listSSID.toArray(new CharSequence[0]));
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            List<CharSequence> listSSID = new ArrayList<>();
+            List<WifiConfiguration> configs = wm.getConfiguredNetworks();
+            if (configs != null)
+                for (WifiConfiguration config : configs)
+                    listSSID.add(config.SSID == null ? "NULL" : config.SSID);
+            for (String ssid : ssids)
+                if (!listSSID.contains(ssid))
+                    listSSID.add(ssid);
+            pref_wifi_homes.setEntries(listSSID.toArray(new CharSequence[0]));
+            pref_wifi_homes.setEntryValues(listSSID.toArray(new CharSequence[0]));
+        }
 
         Preference pref_reset_usage = screen.findPreference("reset_usage");
         pref_reset_usage.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
@@ -299,6 +306,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         Preference pref_block_domains = screen.findPreference("use_hosts");
         EditTextPreference pref_rcode = (EditTextPreference) screen.findPreference("rcode");
         Preference pref_hosts_import = screen.findPreference("hosts_import");
+        Preference pref_hosts_import_append = screen.findPreference("hosts_import_append");
         EditTextPreference pref_hosts_url = (EditTextPreference) screen.findPreference("hosts_url");
         final Preference pref_hosts_download = screen.findPreference("hosts_download");
 
@@ -311,6 +319,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             cat_advanced.removePreference(pref_rcode);
             cat_advanced.removePreference(pref_forwarding);
             cat_backup.removePreference(pref_hosts_import);
+            cat_backup.removePreference(pref_hosts_import_append);
             cat_backup.removePreference(pref_hosts_url);
             cat_backup.removePreference(pref_hosts_download);
 
@@ -329,6 +338,14 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
                 @Override
                 public boolean onPreferenceClick(Preference preference) {
                     startActivityForResult(getIntentOpenHosts(), ActivitySettings.REQUEST_HOSTS);
+                    return true;
+                }
+            });
+            pref_hosts_import_append.setEnabled(pref_hosts_import.isEnabled());
+            pref_hosts_import_append.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
+                @Override
+                public boolean onPreferenceClick(Preference preference) {
+                    startActivityForResult(getIntentOpenHosts(), ActivitySettings.REQUEST_HOSTS_APPEND);
                     return true;
                 }
             });
@@ -614,6 +631,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             String vpn4 = prefs.getString(name, null);
             try {
                 checkAddress(vpn4);
+                prefs.edit().putString(name, vpn4.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
                 ((EditTextPreference) getPreferenceScreen().findPreference(name)).setText(null);
@@ -628,6 +646,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             String vpn6 = prefs.getString(name, null);
             try {
                 checkAddress(vpn6);
+                prefs.edit().putString(name, vpn6.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
                 ((EditTextPreference) getPreferenceScreen().findPreference(name)).setText(null);
@@ -642,6 +661,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             String dns = prefs.getString(name, null);
             try {
                 checkAddress(dns);
+                prefs.edit().putString(name, dns.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
                 ((EditTextPreference) getPreferenceScreen().findPreference(name)).setText(null);
@@ -721,7 +741,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             getPreferenceScreen().findPreference(name).setTitle(getString(R.string.setting_stats_samples, prefs.getString(name, "90")));
 
         else if ("hosts_url".equals(name))
-            getPreferenceScreen().findPreference(name).setSummary(prefs.getString(name, "http://www.netguard.me/hosts"));
+            getPreferenceScreen().findPreference(name).setSummary(prefs.getString(name, BuildConfig.HOSTS_FILE_URI));
 
         else if ("loglevel".equals(name))
             ServiceSinkhole.reload("changed " + name, this, false);
@@ -764,7 +784,9 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
     }
 
     private void checkAddress(String address) throws IllegalArgumentException, UnknownHostException {
-        if (address == null || TextUtils.isEmpty(address.trim()))
+        if (address != null)
+            address = address.trim();
+        if (TextUtils.isEmpty(address))
             throw new IllegalArgumentException("Bad address");
         if (!Util.isNumericAddress(address))
             throw new IllegalArgumentException("Bad address");
@@ -821,7 +843,11 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
 
         } else if (requestCode == REQUEST_HOSTS) {
             if (resultCode == RESULT_OK && data != null)
-                handleHosts(data);
+                handleHosts(data, false);
+
+        } else if (requestCode == REQUEST_HOSTS_APPEND) {
+            if (resultCode == RESULT_OK && data != null)
+                handleHosts(data, true);
 
         } else {
             Log.w(TAG, "Unknown activity result request=" + requestCode);
@@ -907,7 +933,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    private void handleHosts(final Intent data) {
+    private void handleHosts(final Intent data, final boolean append) {
         new AsyncTask<Object, Object, Throwable>() {
             @Override
             protected Throwable doInBackground(Object... objects) {
@@ -922,7 +948,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
                     String streamType = (streamTypes == null || streamTypes.length == 0 ? "*/*" : streamTypes[0]);
                     AssetFileDescriptor descriptor = resolver.openTypedAssetFileDescriptor(data.getData(), streamType, null);
                     in = descriptor.createInputStream();
-                    out = new FileOutputStream(hosts);
+                    out = new FileOutputStream(hosts, append);
 
                     int len;
                     long total = 0;
