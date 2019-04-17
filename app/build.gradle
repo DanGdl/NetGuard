@@ -1,8 +1,8 @@
 apply plugin: 'com.android.application'
 
-def keystorePropertiesFile = rootProject.file("keystore.properties")
-def keystoreProperties = new Properties()
-keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+//def keystorePropertiesFile = rootProject.file("keystore.properties")
+//def keystoreProperties = new Properties()
+//keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
     compileSdkVersion = 28
@@ -28,14 +28,14 @@ android {
             abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
         }
     }
-    signingConfigs {
-        release {
-            storeFile file(keystoreProperties['storeFile'])
-            storePassword keystoreProperties['storePassword']
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-        }
-    }
+//    signingConfigs {
+//        release {
+//            storeFile file(keystoreProperties['storeFile'])
+//            storePassword keystoreProperties['storePassword']
+//            keyAlias keystoreProperties['keyAlias']
+//            keyPassword keystoreProperties['keyPassword']
+//        }
+//    }
 
     lintOptions {
         disable 'MissingTranslation'
@@ -52,7 +52,7 @@ android {
             minifyEnabled = true
             useProguard = true
             proguardFiles.add(file('proguard-rules.pro'))
-            signingConfig signingConfigs.release
+            // signingConfig signingConfigs.release
             buildConfigField "boolean", "PLAY_STORE_RELEASE", "false"
             buildConfigField "String", "HOSTS_FILE_URI", "\"http://www.netguard.me/hosts\""
             buildConfigField "String", "GITHUB_LATEST_API", "\"https://api.github.com/repos/M66B/NetGuard/releases/latest\""
@@ -60,7 +60,7 @@ android {
         play {
             minifyEnabled = true
             useProguard = true
-            signingConfig signingConfigs.release
+            // signingConfig signingConfigs.release
             proguardFiles.add(file('proguard-rules.pro'))
             buildConfigField "boolean", "PLAY_STORE_RELEASE", "true"
             buildConfigField "String", "HOSTS_FILE_URI", "\"\""
@@ -83,9 +83,9 @@ dependencies {
     // https://developer.android.com/topic/libraries/support-library/androidx-rn
     implementation 'androidx.appcompat:appcompat:1.0.2'
     implementation 'androidx.recyclerview:recyclerview:1.0.0'
-    annotationProcessor 'androidx.annotation:annotation:1.0.1'
+    annotationProcessor 'androidx.annotation:annotation:1.0.2'
 
     // https://bumptech.github.io/glide/
-    implementation 'com.github.bumptech.glide:glide:4.8.0'
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.8.0'
+    implementation 'com.github.bumptech.glide:glide:4.9.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.9.0'
 }
