@@ -584,6 +584,12 @@ void check_tcp_socket(const struct arguments *args,
                         log_android(ANDROID_LOG_DEBUG, "%s recv bytes %d", session, bytes);
                         s->tcp.received += bytes;
 
+                        // Process DNS response
+                        if (ntohs(s->tcp.dest) == 53 && bytes > 2) {
+                            ssize_t dlen = bytes - 2;
+                            parse_dns_response(args, s, buffer + 2, (size_t *) &dlen);
+                        }
+
                         // Forward to tun
                         if (write_data(args, &s->tcp, buffer, (size_t) bytes) >= 0) {
                             s->tcp.local_seq += bytes;
