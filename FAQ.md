@@ -26,6 +26,7 @@ NetGuard will do its best, but it is limited by the fact it must use the VPN ser
 This is the trade-off required to make a firewall which does not require root access.
 The firewall can only start when Android "allows" it to start,
 so it will not offer protection during early boot-up (although you can disable your network before rebooting).
+Also, the VPN service needs to be restarted to apply new rules when connectivity has changed or when the screen is being turned on or off.
 It will, however, be much better than nothing.
 
 Android N and later allows NetGuard to be an [Always-On VPN](https://developer.android.com/preview/features/afw.html#always-on-vpn).
@@ -492,6 +493,9 @@ resulting in not recognizing an IP address or recognizing a wrong IP address.
 You can try to workaround this by changing the DNS TTL value setting of NetGuard.
 This value is used as a minimum DNS TTL value in an attempt to mimick the behavior of Android.
 
+NetGuard will also block traffic while restarting the Android VPN service to apply new rules,
+for example when connectivity changes or when the screen is turned on or off.
+
 <a name="faq49"></a>
 **(49) Does NetGuard encrypt my internet traffic / hide my IP address?**
 
@@ -679,6 +683,21 @@ this resulted in wasting battery power and in crashes on some Android versions w
 
 So, because blocking NetGuard with itself didn't added anything useful
 and to save on battery power and to prevent crashes blocking NetGuard with itself was removed.
+
+<br />
+
+<a name="faq66"></a>
+**(66) Why is a blocked app still accessing the internet?**
+
+Blocked apps cannot access the internet. There are no exceptions to this.
+
+However:
+
+* Incoming (push) messages are received by the system component Google Play services and not apps, especially when the app is in the background or the screen is turned off
+* Similarly, advertisements are mostly received by the system component Google Play services
+* Downloads are often performed by the download manager and not the app
+
+If you like to block Google Play services or the download manager, you'll need to enable managing system apps in the advanced settings.
 
 <br />
 
