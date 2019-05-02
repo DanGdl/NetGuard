@@ -193,7 +193,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                 prefs.edit().putBoolean("enabled", isChecked).apply();
 
                 if (isChecked) {
-
                     String alwaysOn = Settings.Secure.getString(getContentResolver(), "always_on_vpn_app");
                     Log.i(TAG, "Always-on=" + alwaysOn);
                     if (!TextUtils.isEmpty(alwaysOn))
@@ -212,16 +211,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                             Toast.makeText(ActivityMain.this, R.string.msg_always_on, Toast.LENGTH_LONG).show();
                             return;
                         }
-
-                    String dns_mode = Settings.Global.getString(getContentResolver(), "private_dns_mode");
-                    Log.i(TAG, "Private DNS mode=" + dns_mode);
-                    if (dns_mode == null)
-                        dns_mode = "off";
-                    if (!"off".equals(dns_mode)) {
-                        swEnabled.setChecked(false);
-                        Toast.makeText(ActivityMain.this, R.string.msg_private_dns, Toast.LENGTH_LONG).show();
-                        return;
-                    }
 
                     try {
                         final Intent prepare = VpnService.prepare(ActivityMain.this);
