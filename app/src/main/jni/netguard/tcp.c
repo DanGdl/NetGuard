@@ -145,8 +145,8 @@ int monitor_tcp_session(const struct arguments *args, struct ng_session *s, int 
         // Check for outgoing data
         if (s->tcp.forward != NULL) {
             uint32_t buffer_size = (uint32_t) get_receive_buffer(s);
-            if (s->tcp.forward->seq + s->tcp.forward->sent == s->tcp.remote_seq &&
-                s->tcp.forward->len - s->tcp.forward->sent < buffer_size)
+            if (s->tcp.forward->seq == s->tcp.remote_seq &&
+                s->tcp.forward->len < buffer_size)
                 events = events | EPOLLOUT;
             else
                 recheck = 1;
@@ -205,7 +205,7 @@ uint32_t get_receive_window(const struct ng_session *cur) {
     uint32_t toforward = 0;
     struct segment *q = cur->tcp.forward;
     while (q != NULL) {
-        toforward += (q->len - q->sent);
+        toforward += q->len;
         q = q->next;
     }
 
@@ -459,17 +459,15 @@ void check_tcp_socket(const struct arguments *args,
                 // Forward data
                 uint32_t buffer_size = (uint32_t) get_receive_buffer(s);
                 while (s->tcp.forward != NULL &&
-                       s->tcp.forward->seq + s->tcp.forward->sent == s->tcp.remote_seq &&
-                       s->tcp.forward->len - s->tcp.forward->sent < buffer_size) {
-                    log_android(ANDROID_LOG_DEBUG, "%s fwd %u...%u sent %u",
+                       s->tcp.forward->seq == s->tcp.remote_seq &&
+                       s->tcp.forward->len < buffer_size) {
+                    log_android(ANDROID_LOG_DEBUG, "%s fwd %u...%u",
                                 session,
                                 s->tcp.forward->seq - s->tcp.remote_start,
-                                s->tcp.forward->seq + s->tcp.forward->len - s->tcp.remote_start,
-                                s->tcp.forward->sent);
+                                s->tcp.forward->seq + s->tcp.forward->len - s->tcp.remote_start);
 
                     ssize_t sent = send(s->socket,
-                                        s->tcp.forward->data + s->tcp.forward->sent,
-                                        s->tcp.forward->len - s->tcp.forward->sent,
+                                        s->tcp.forward->data, s->tcp.forward->len,
                                         (unsigned int) (MSG_NOSIGNAL | (s->tcp.forward->psh
                                                                         ? 0
                                                                         : MSG_MORE)));
@@ -487,31 +485,36 @@ void check_tcp_socket(const struct arguments *args,
                         fwd = 1;
                         buffer_size -= sent;
                         s->tcp.sent += sent;
-                        s->tcp.forward->sent += sent;
-                        s->tcp.remote_seq = s->tcp.forward->seq + s->tcp.forward->sent;
+                        s->tcp.remote_seq = s->tcp.forward->seq + sent;
 
-                        if (s->tcp.forward->len == s->tcp.forward->sent) {
-                            struct segment *p = s->tcp.forward;
-                            s->tcp.forward = s->tcp.forward->next;
-                            free(p->data);
-                            free(p);
-                        } else {
-                            log_android(ANDROID_LOG_WARN,
-                                        "%s partial send %u/%u",
-                                        session, s->tcp.forward->sent, s->tcp.forward->len);
-                            break;
+                        if (sent != s->tcp.forward->len) {
+                            log_android(ANDROID_LOG_WARN, "%s partial send %u/%u",
+                                        session, sent, s->tcp.forward->len);
+
+                            struct segment *n = malloc(sizeof(struct segment));
+                            n->seq = s->tcp.forward->seq + sent;
+                            n->len = s->tcp.forward->len - (uint16_t) sent;
+                            n->data = malloc(n->len);
+                            memcpy(n->data, s->tcp.forward->data + sent, n->len);
+                            n->psh = s->tcp.forward->psh;
+                            n->next = s->tcp.forward->next;
+                            s->tcp.forward->next = n;
                         }
+
+                        struct segment *p = s->tcp.forward;
+                        s->tcp.forward = s->tcp.forward->next;
+                        free(p->data);
+                        free(p);
                     }
                 }
 
                 // Log data buffered
                 struct segment *seg = s->tcp.forward;
                 while (seg != NULL) {
-                    log_android(ANDROID_LOG_WARN, "%s queued %u...%u sent %u",
+                    log_android(ANDROID_LOG_WARN, "%s queued %u...%u",
                                 session,
                                 seg->seq - s->tcp.remote_start,
-                                seg->seq + seg->len - s->tcp.remote_start,
-                                seg->sent);
+                                seg->seq + seg->len - s->tcp.remote_start);
                     seg = seg->next;
                 }
             }
@@ -750,7 +753,6 @@ jboolean handle_tcp(const struct arguments *args,
                 s->tcp.forward = malloc(sizeof(struct segment));
                 s->tcp.forward->seq = s->tcp.remote_seq;
                 s->tcp.forward->len = datalen;
-                s->tcp.forward->sent = 0;
                 s->tcp.forward->psh = tcphdr->psh;
                 s->tcp.forward->data = malloc(datalen);
                 memcpy(s->tcp.forward->data, data, datalen);
@@ -985,7 +987,6 @@ void queue_tcp(const struct arguments *args,
             struct segment *n = malloc(sizeof(struct segment));
             n->seq = seq;
             n->len = datalen;
-            n->sent = 0;
             n->psh = tcphdr->psh;
             n->data = malloc(datalen);
             memcpy(n->data, data, datalen);
