@@ -630,7 +630,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         else if ("vpn4".equals(name)) {
             String vpn4 = prefs.getString(name, null);
             try {
-                checkAddress(vpn4);
+                checkAddress(vpn4, false);
                 prefs.edit().putString(name, vpn4.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
@@ -645,7 +645,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         } else if ("vpn6".equals(name)) {
             String vpn6 = prefs.getString(name, null);
             try {
-                checkAddress(vpn6);
+                checkAddress(vpn6, false);
                 prefs.edit().putString(name, vpn6.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
@@ -660,7 +660,7 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         } else if ("dns".equals(name) || "dns2".equals(name)) {
             String dns = prefs.getString(name, null);
             try {
-                checkAddress(dns);
+                checkAddress(dns, true);
                 prefs.edit().putString(name, dns.trim()).apply();
             } catch (Throwable ex) {
                 prefs.edit().remove(name).apply();
@@ -783,16 +783,18 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             ServiceSinkhole.reload("permission granted", this, false);
     }
 
-    private void checkAddress(String address) throws IllegalArgumentException, UnknownHostException {
+    private void checkAddress(String address, boolean allow_local) throws IllegalArgumentException, UnknownHostException {
         if (address != null)
             address = address.trim();
         if (TextUtils.isEmpty(address))
             throw new IllegalArgumentException("Bad address");
         if (!Util.isNumericAddress(address))
             throw new IllegalArgumentException("Bad address");
-        InetAddress idns = InetAddress.getByName(address);
-        if (idns.isLoopbackAddress() || idns.isAnyLocalAddress())
-            throw new IllegalArgumentException("Bad address");
+        if (!allow_local) {
+            InetAddress iaddr = InetAddress.getByName(address);
+            if (iaddr.isLoopbackAddress() || iaddr.isAnyLocalAddress())
+                throw new IllegalArgumentException("Bad address");
+        }
     }
 
     private BroadcastReceiver interactiveStateReceiver = new BroadcastReceiver() {
@@ -1405,8 +1407,14 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         private int getUid(String pkg) throws PackageManager.NameNotFoundException {
             if ("root".equals(pkg))
                 return 0;
-            else if ("mediaserver".equals(pkg))
+            else if ("android.media".equals(pkg))
                 return 1013;
+            else if ("android.multicast".equals(pkg))
+                return 1020;
+            else if ("android.gps".equals(pkg))
+                return 1021;
+            else if ("android.dns".equals(pkg))
+                return 1051;
             else if ("nobody".equals(pkg))
                 return 9999;
             else
