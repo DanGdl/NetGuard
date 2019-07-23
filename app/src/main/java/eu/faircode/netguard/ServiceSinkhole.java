@@ -137,7 +137,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
     private int last_blocked = -1;
     private int last_hosts = -1;
 
-    private long jni_context = 0;
+    private static long jni_context = 0;
     private Thread tunnelThread = null;
     private ServiceSinkhole.Builder last_builder = null;
     private ParcelFileDescriptor vpn = null;
@@ -459,6 +459,8 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
                         !prefs.getBoolean("show_stats", false))
                     stopForeground(true);
 
+                // Request garbage collection
+                System.gc();
             } catch (Throwable ex) {
                 Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
 
@@ -568,14 +570,41 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
                 } else {
                     last_builder = builder;
-                    Log.i(TAG, "VPN restart");
 
-                    if (vpn != null) {
-                        stopNative(vpn, clear);
-                        stopVPN(vpn);
+                    boolean handover = prefs.getBoolean("handover", false);
+                    Log.i(TAG, "VPN restart handover=" + handover);
+
+                    if (handover) {
+                        // Attempt seamless handover
+                        ParcelFileDescriptor prev = vpn;
+                        vpn = startVPN(builder);
+
+                        if (prev != null && vpn == null) {
+                            Log.w(TAG, "Handover failed");
+                            stopNative(prev, clear);
+                            stopVPN(prev);
+                            prev = null;
+                            try {
+                                Thread.sleep(3000);
+                            } catch (InterruptedException ignored) {
+                            }
+                            vpn = startVPN(last_builder);
+                            if (vpn == null)
+                                throw new IllegalStateException("Handover failed");
+                        }
+
+                        if (prev != null) {
+                            stopNative(prev, clear);
+                            stopVPN(prev);
+                        }
+                    } else {
+                        if (vpn != null) {
+                            stopNative(vpn, clear);
+                            stopVPN(vpn);
+                        }
+
+                        vpn = startVPN(builder);
                     }
-
-                    vpn = startVPN(builder);
                 }
             }
 
@@ -2320,6 +2349,12 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         Log.i(TAG, "Create version=" + Util.getSelfVersionName(this) + "/" + Util.getSelfVersionCode(this));
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        if (jni_context != 0) {
+            jni_stop(jni_context);
+            jni_done(jni_context);
+            jni_context = 0;
+        }
 
         // Native init
         jni_context = jni_init(Build.VERSION.SDK_INT);
