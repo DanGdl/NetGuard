@@ -36,6 +36,7 @@
 #define TAG "NetGuard.JNI"
 
 // #define PROFILE_JNI 5
+// #define PROFILE_MEMORY
 
 #define EPOLL_TIMEOUT 3600 // seconds
 #define EPOLL_EVENTS 20
@@ -551,3 +552,17 @@ int is_readable(int fd);
 int is_writable(int fd);
 
 long long get_ms();
+
+void ng_add_alloc(void *ptr, const char *tag);
+
+void ng_delete_alloc(void *ptr, const char *file, int line);
+
+void *ng_malloc(size_t __byte_count, const char *tag);
+
+void *ng_calloc(size_t __item_count, size_t __item_size, const char *tag);
+
+void *ng_realloc(void *__ptr, size_t __byte_count, const char *tag);
+
+void ng_free(void *__ptr, const char *file, int line);
+
+void ng_dump();
